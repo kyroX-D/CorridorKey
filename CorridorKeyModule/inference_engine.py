@@ -336,7 +336,6 @@ class CorridorKeyEngine:
         )
 
         del pred_fg, pred_alpha
-        torch.cuda.empty_cache()
 
         # A. Clean matte
         if auto_despeckle:
