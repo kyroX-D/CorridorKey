@@ -201,7 +201,7 @@ class CorridorKeyEngine:
             self.model = compiled_model
             logger.info("Model compiled successfully (mode=%s)", compile_mode)
 
-        except Exception as e:
+        except (RuntimeError, OSError) as e:
             logger.info(f"Compilation error: {e}")
             logger.warning("Model compilation failed. Falling back to eager mode.")
             if torch.cuda.is_available():
