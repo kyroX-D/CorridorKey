@@ -18,11 +18,11 @@ import logging
 import os
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from enum import Enum
+from queue import Queue
 from typing import Any, Callable
 
 import numpy as np
@@ -549,14 +549,18 @@ class CorridorKeyService:
                 break
             try:
                 img, stem, is_linear = self._read_input_frame(
-                    clip, i, input_files, input_cap, input_is_linear,
+                    clip,
+                    i,
+                    input_files,
+                    input_cap,
+                    input_is_linear,
                 )
                 mask = self._read_alpha_frame(clip, i, alpha_files, alpha_cap)
             except Exception as e:
                 prefetch_queue.put((i, None, None, f"{i:05d}", input_is_linear, str(e)))
                 continue
             prefetch_queue.put((i, img, mask, stem, is_linear, None))
-    
+
         prefetch_queue.put(None)
 
     def run_inference(
@@ -637,17 +641,22 @@ class CorridorKeyService:
             frame_indices = range(num_frames)
             range_count = num_frames
 
-        prefetch_q: Queue = Queue(maxsize=3) 
+        prefetch_q: Queue = Queue(maxsize=3)
         write_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ck-write")
         write_futures = []
 
-       
         prefetch_thread = threading.Thread(
             target=self._prefetch_frames,
             args=(
-                clip, frame_indices, input_files, alpha_files,
-                input_cap, alpha_cap, params.input_is_linear,
-                prefetch_q, job,
+                clip,
+                frame_indices,
+                input_files,
+                alpha_files,
+                input_cap,
+                alpha_cap,
+                params.input_is_linear,
+                prefetch_q,
+                job,
             ),
             daemon=True,
         )
@@ -656,12 +665,11 @@ class CorridorKeyService:
         try:
             progress_i = 0
             while True:
-                
                 if job and job.is_cancelled:
                     raise JobCancelledError(clip.name, progress_i)
 
                 item = prefetch_q.get()
-                if item is None:  
+                if item is None:
                     break
 
                 i, img, mask, input_stem, is_linear, read_error = item
@@ -669,7 +677,6 @@ class CorridorKeyService:
                 if on_progress:
                     on_progress(clip.name, progress_i, range_count)
 
-                
                 if read_error:
                     skipped.append(i)
                     results.append(FrameResult(i, input_stem, False, read_error))
@@ -684,7 +691,6 @@ class CorridorKeyService:
                     progress_i += 1
                     continue
 
-                
                 if input_stem in skip_stems:
                     results.append(FrameResult(i, input_stem, True, "resumed (skipped)"))
                     progress_i += 1
@@ -696,11 +702,9 @@ class CorridorKeyService:
                     progress_i += 1
                     continue
 
-                
                 if mask.shape[:2] != img.shape[:2]:
                     mask = cv2.resize(mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
 
-                
                 try:
                     t_frame = time.monotonic()
                     with self._gpu_lock:
@@ -724,9 +728,14 @@ class CorridorKeyService:
                     progress_i += 1
                     continue
 
-                
                 write_future = write_pool.submit(
-                    self._write_outputs, res, dirs, input_stem, clip.name, i, cfg,
+                    self._write_outputs,
+                    res,
+                    dirs,
+                    input_stem,
+                    clip.name,
+                    i,
+                    cfg,
                 )
                 write_futures.append((i, input_stem, write_future))
                 results.append(FrameResult(i, input_stem, True))
@@ -736,13 +745,12 @@ class CorridorKeyService:
             if on_progress:
                 on_progress(clip.name, range_count, range_count)
 
-            
-            for i, stem, fut in write_futures:
+            for i, _stem, fut in write_futures:
                 try:
-                    fut.result()  
+                    fut.result()
                 except WriteFailureError as e:
                     logger.error(str(e))
-                    
+
                     for r in results:
                         if r.frame_index == i and r.success:
                             r.success = False
@@ -758,7 +766,6 @@ class CorridorKeyService:
                 input_cap.release()
             if alpha_cap:
                 alpha_cap.release()
-
 
         # Summary
         processed = sum(1 for r in results if r.success)
