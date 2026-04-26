@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import glob
 import logging
 import os
@@ -16,14 +15,14 @@ os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import cv2
 import numpy as np
 
-from backend.frame_io import EXR_WRITE_FLAGS, read_image_frame
 from backend.ffmpeg_tools import find_ffmpeg, probe_video, stitch_video
+from backend.frame_io import EXR_WRITE_FLAGS, read_image_frame
 from device_utils import resolve_device
 
 if TYPE_CHECKING:
     from gvm_core import GVMProcessor
-from BiRefNetModule.wrapper import BiRefNetHandler, usage_to_weights_file
 from backend.natural_sort import natsorted
+from BiRefNetModule.wrapper import BiRefNetHandler, usage_to_weights_file
 
 logger = logging.getLogger(__name__)
 
@@ -345,7 +344,6 @@ def run_birefnet(
             except Exception:
                 logger.exception(f"BiRefNet failed for {clip.name}")
 
-
     finally:
         handler.cleanup()
 
@@ -556,9 +554,8 @@ def run_videomama(
             # Name setup
             if clip.input_asset.type == "sequence":
                 in_names = [
-                    os.path.splitext(f)[0] 
-                    for f in natsorted([f for f in 
-os.listdir(clip.input_asset.path) if is_image_file(f)])
+                    os.path.splitext(f)[0]
+                    for f in natsorted([f for f in os.listdir(clip.input_asset.path) if is_image_file(f)])
                 ]
             else:
                 stem = os.path.splitext(os.path.basename(clip.input_asset.path))[0]
@@ -593,7 +590,6 @@ os.listdir(clip.input_asset.path) if is_image_file(f)])
             logger.exception(f"VideoMaMa failed for {clip.name}")
 
 
-
 def run_inference(
     clips,
     device=None,
@@ -620,7 +616,6 @@ def run_inference(
     # Ensure Output Directory exists
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-
 
     if device is None:
         device = resolve_device()
@@ -820,35 +815,34 @@ def run_inference(
 
         # 7. Stitch comp frames into MP4 (if input was video)
         if clip.input_asset and clip.input_asset.type == "video":
+            if find_ffmpeg():
+                # Get source fps
+                try:
+                    video_info = probe_video(clip.input_asset.path)
+                    fps = video_info.get("fps", 24.0)
+                except Exception:
+                    fps = 24.0
 
-                if find_ffmpeg():
-                    # Get source fps
-                    try:
-                        video_info = probe_video(clip.input_asset.path)
-                        fps = video_info.get("fps", 24.0)
-                    except Exception:
-                        fps = 24.0
+                comp_video_path = os.path.join(clip_out_root, f"{clip.name}_comp.mp4")
 
-                    comp_video_path = os.path.join(clip_out_root, f"{clip.name}_comp.mp4")
-
-                    # Detect frame pattern from saved files
-                    comp_files = natsorted(f for f in os.listdir(comp_dir) if f.endswith(".png"))
-                    if comp_files:
-                        # Frames are named {input_stem}.png — e.g. 00000.png
-                        # Build ffmpeg pattern from first file
-                        first = comp_files[0]
-                        stem = os.path.splitext(first)[0]
-                        if stem.isdigit():
-                            pattern = f"%0{len(stem)}d.png"
-                        else:
-                            pattern = "frame_%06d.png"
-
-                        logger.info(f"Stitching comp video: {comp_dir} -> {comp_video_path} @ {fps} fps")
-                        stitch_video(comp_dir, comp_video_path, fps=fps, pattern=pattern)
+                # Detect frame pattern from saved files
+                comp_files = natsorted(f for f in os.listdir(comp_dir) if f.endswith(".png"))
+                if comp_files:
+                    # Frames are named {input_stem}.png — e.g. 00000.png
+                    # Build ffmpeg pattern from first file
+                    first = comp_files[0]
+                    stem = os.path.splitext(first)[0]
+                    if stem.isdigit():
+                        pattern = f"%0{len(stem)}d.png"
                     else:
-                        logger.warning(f"No comp frames found in {comp_dir}, skipping video stitch.")
+                        pattern = "frame_%06d.png"
+
+                    logger.info(f"Stitching comp video: {comp_dir} -> {comp_video_path} @ {fps} fps")
+                    stitch_video(comp_dir, comp_video_path, fps=fps, pattern=pattern)
                 else:
-                    logger.info("ffmpeg not found — skipping comp video stitch.")
+                    logger.warning(f"No comp frames found in {comp_dir}, skipping video stitch.")
+            else:
+                logger.info("ffmpeg not found — skipping comp video stitch.")
 
         logger.info(f"Clip {clip.name} Complete.")
 
