@@ -986,7 +986,3 @@ def scan_clips() -> list[ClipEntry]:
         logger.info("All clip folders appear valid.")
 
     return valid_clips
-        if not args.win_path:
-            print("Error: --win_path required for wizard.")
-        else:
-            raise NotImplementedError("interactive_wizard is not yet implemented")
